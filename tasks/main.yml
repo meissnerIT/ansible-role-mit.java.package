@@ -1,0 +1,41 @@
+---
+
+# https://docs.azul.com/core/zulu-openjdk/install/debian#install-from-azul-apt-repository
+
+- set_fact:
+    major_version: "{{ java_version }}"
+    gpg_key_name: azul.gpg
+    apt_source_list_name: local-azul-zulu.list
+- set_fact:
+    apt_repository: "deb [signed-by=/usr/share/keyrings/{{ gpg_key_name }}] https://repos.azul.com/zulu/deb stable main"
+
+# curl -s https://repos.azul.com/azul-repo.key | gpg --dearmor -o azul.gpg
+- name: Add apt gpg key
+  copy:
+    src: "{{ gpg_key_name }}"
+    dest: /usr/share/keyrings/
+- name: Enable apt repository
+  apt_repository:
+    repo: "{{ apt_repository }}"
+    state: present
+  changed_when: no
+- name: Update Java to latest {{ major_version }} version
+  apt:
+    name: zulu{{ major_version }}-jdk
+    update_cache: yes
+    state: latest
+- name: Deactivate apt repository
+  apt_repository:
+    repo: "{{ apt_repository }}"
+    state: absent
+  changed_when: no
+- name: Remove /etc/apt/sources.list.d/{{ apt_source_list_name }}
+  file:
+    path: /etc/apt/sources.list.d/{{ apt_source_list_name }}
+    state: absent
+- name: Add {{ apt_source_list_name }}.disabled
+  template:
+    src: "{{ apt_source_list_name }}"
+    dest: /etc/apt/sources.list.d/{{ apt_source_list_name }}.disabled
+  changed_when: no
+

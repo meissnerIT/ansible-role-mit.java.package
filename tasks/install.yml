@@ -1,22 +1,12 @@
 ---
-# mit-ansible-install-package-from-apt-source
+# mit-ansible-install-package-from-apt-source 2025-10-30
 # 2023-10-12: Initial version
 # 2024-09-18: Cosmetic updates (ansible-lint)
-
-# https://docs.azul.com/core/zulu-openjdk/install/debian#install-from-azul-apt-repository
-
-- ansible.builtin.set_fact:
-    ansible_role_name: mit.java.package
-    apt_keyrings: /etc/apt/keyrings
-    # used for filenames
-    visible_name: azul-zulu
-- ansible.builtin.set_fact:
-    local_apt_key: "{{ apt_keyrings }}/{{ visible_name }}.gpg"
-- ansible.builtin.set_fact:
-    apt_package: zulu{{ java_version }}-jdk
-    apt_source_list_name: local-{{ visible_name }}.list
-    apt_repository: deb [signed-by={{ local_apt_key }}] https://repos.azul.com/zulu/deb stable main
-    gpg_key_src: https://repos.azul.com/azul-repo.key
+# 2024-09-19: Added handler "apt-package-has-been-changed"
+# 2025-01-11: Cosmetic updates (Removed ansible-lint warnings)
+# 2025-01-23: Added executable to "Add apt gpg key"
+# 2025-04-01: Removed all variables
+# 2025-10-30: Added support for gpg key as file
 
 # No need to change anything beyond this line
 
@@ -24,14 +14,23 @@
   ansible.builtin.file:
     path: "{{ apt_keyrings }}"
     state: directory
+    mode: "755"
 - name: Install gpg
   ansible.builtin.apt:
     pkg: gpg
-- name: Add apt gpg key
+- name: Add apt gpg key (wget) # noqa: risky-shell-pipe command-instead-of-module
   ansible.builtin.shell: wget -q -O - {{ gpg_key_src }} | gpg --dearmor > {{ local_apt_key }}
   args:
     creates: "{{ local_apt_key }}"
+    executable: /bin/bash
   environment: "{{ proxy_env }}"
+  when: gpg_key_src is regex('^http.*')
+- name: Add apt gpg key (copy)
+  ansible.builtin.copy:
+    src: "{{ gpg_key_src }}"
+    dest: "{{ local_apt_key }}"
+    mode: "0644"
+  when: gpg_key_src is not regex('^http.*')
 - name: Enable apt repository
   ansible.builtin.apt_repository:
     repo: "{{ apt_repository }}"
@@ -42,6 +41,7 @@
     name: "{{ apt_package }}"
     update_cache: true
     state: present
+  notify: apt-package-has-been-changed
 - name: Deactivate apt repository
   ansible.builtin.apt_repository:
     repo: "{{ apt_repository }}"
@@ -51,8 +51,9 @@
   ansible.builtin.file:
     path: /etc/apt/sources.list.d/{{ apt_source_list_name }}
     state: absent
-- name: Add {{ apt_source_list_name }}.disabled
+- name: Add {{ apt_source_list_name }}.disabled # noqa name[template]
   ansible.builtin.template:
     src: local-apt.list
     dest: /etc/apt/sources.list.d/{{ apt_source_list_name }}.disabled
+    mode: "644"
   changed_when: false

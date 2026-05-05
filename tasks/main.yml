@@ -1,2 +1,23 @@
 ---
-- ansible.builtin.include_tasks: install.yml
+# https://docs.azul.com/core/zulu-openjdk/install/debian#install-from-azul-apt-repository
+
+- name: Set defaults
+  ansible.builtin.set_fact:
+    # ansible_role_name: mit.java.package
+    apt_keyrings: /etc/apt/keyrings
+    # 17.0.19-3 → 17
+    java_major_version: "{{ java_version | regex_replace('^([0-9]+)(.*)$', '\\1') }}"
+    # used for filenames
+    visible_name: azul-zulu
+- name: Set defaults
+  ansible.builtin.set_fact:
+    local_apt_key: "{{ apt_keyrings }}/{{ visible_name }}.gpg"
+- name: Set defaults
+  ansible.builtin.set_fact:
+    apt_package: zulu{{ java_major_version }}-jdk={{ java_version }}
+    apt_source_list_name: local-{{ visible_name }}.list
+    apt_repository: deb [signed-by={{ local_apt_key }}] https://repos.azul.com/zulu/deb stable main
+    gpg_key_src: https://repos.azul.com/azul-repo.key
+
+- name: Include install.yml
+  ansible.builtin.include_tasks: install.yml
